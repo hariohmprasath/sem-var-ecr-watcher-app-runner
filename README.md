@@ -144,7 +144,31 @@ docker tag hello-world-apprunner-repo:latest <<account>>.dkr.ecr.us-east-1.amazo
 docker push <<account>>.dkr.ecr.us-east-1.amazonaws.com/hello-world-apprunner-repo:1.2.3
 ```
 
-5. Create a new App Runner service using the ECR repository that was created in the previous step.
+5. Create a App Runner access role and attach ECR access policy to it.
+
+```bash
+export TP_FILE=$(mktemp)
+export ROLE_NAME=AppRunnerSemVarAccessRole
+cat <<EOF | tee $TP_FILE
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "build.apprunner.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+aws iam create-role --role-name $ROLE_NAME --assume-role-policy-document file://$TP_FILE
+rm $TP_FILE
+aws iam attach-role-policy --role-name $ROLE_NAME --policy-arn arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+```
+
+6. Create a new App Runner service using the ECR repository that was created in the previous step.
 
 ```bash
 aws apprunner create-service --cli-input-json file://input.json
@@ -156,10 +180,10 @@ Contents of `input.json`:
     "ServiceName": "hello-world-service",
     "SourceConfiguration": {
         "AuthenticationConfiguration": {
-            "AccessRoleArn": "arn:aws:iam::<<region>>:role/my-ecr-role" # Replace with the ARN that has access to the ECR repository
+            "AccessRoleArn": "arn:aws:iam::${AWS_REGION}:role/${ROLE_NAME}"
         },        
         "ImageRepository": {
-            "ImageIdentifier": "<<account>>.dkr.ecr.us-east-1.amazonaws.com/hello-world-apprunner-repo:1.2.3",
+            "ImageIdentifier": "${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/hello-world-apprunner-repo:1.2.3",
             "ImageConfiguration": {
                 "Port": "8000"
             },
@@ -258,6 +282,8 @@ Run the following command from the root directory to delete the stack:
 
 ```bash
 cdk destroy
+aws ecr delete-repository --repository-name hello-world-apprunner-repo --force
+aws iam delete-role --role-name ${ROLE_NAME}
 ```
 
 ---
@@ -268,7 +294,8 @@ Here are some essential items to consider before using this solution:
 
 * The solution uses AWS App Runner APIs to update and deploy the new version of the application, so it is not a fully managed solution. The customer needs to manage the AWS CDK stack and the Lambda function.
 * The solution does not support tracking `latest` tag. If the customer wants to track the latest or fixed tag, we recommend using the native CI/CD support in App Runner.
-* The solution uses various AWS services (like Eventbridge, SQS, Lambda) to track the semantic version pattern. It can get expensive if the customer tracks multiple App Runner services and ECR repositories.
+* The solution uses various AWS services (like Eventbridge, SQS, Lambda) to track the semantic version pattern. As the solution relays on Eventbridge events, SQS messages and Lambda invocations to track the semantic version, it can get expensive if the customer tracks multiple App Runner services and ECR repositories as it would result in multiple events, SQS messages and invocations.
+It can get expensive if the customer tracks multiple App Runner services and ECR repositories.
 * The code is not production ready and is provided as is. The customer should test the solution in a non-production environment before using it.
 * The solution does not support tracking multiple App Runner services using the same repository. If the customer wants to use the same repository for multiple App Runner services based on the semantic version, then the solution code needs to get updated to support this use case.
 
