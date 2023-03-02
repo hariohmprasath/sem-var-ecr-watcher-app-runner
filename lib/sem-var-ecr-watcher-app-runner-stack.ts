@@ -92,13 +92,33 @@ export class SemVarEcrWatcherAppRunnerStack extends cdk.Stack {
     // Attach Lambda to SQS
     ecrSemVarWatcher.addEventSource(new eventsources.SqsEventSource(queue));
 
+    // IAM role to allow decrypt on KMS key
+    const eventBridgeRole = new iam.Role(this, 'semvar-events-role', {
+      assumedBy: new iam.ServicePrincipal('events.amazonaws.com'),
+    });
+
+    lambdaRole.attachInlinePolicy(
+      new iam.Policy(this, 'semvar-events-policy', {
+        statements: [
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+              'kms:Decrypt',
+              'kms:GenerateDataKey',
+            ],
+            resources: ['*'],
+          })
+        ],
+      }),
+    );
+
     // Event bridge rule
     const eventBridgeRule = new events.Rule(this, 'ecr-semvar-watcher-rule', {
       eventPattern: {
         source: ['aws.ecr'],
         detailType: ['ECR Image Action'],
         detail: {
-          actionType: ['PUSH'],
+          "action-type": ['PUSH'],
           result: ['SUCCESS'],
         },
       },
