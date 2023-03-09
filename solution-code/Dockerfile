@@ -1,4 +1,4 @@
-FROM public.ecr.aws/sam/build-java11:latest as build-image
+FROM public.ecr.aws/sam/build-java11:latest-x86_64 as build-image
 
 WORKDIR "/task"
 COPY src/ src/
