@@ -84,7 +84,7 @@ export class SemVarEcrWatcherAppRunnerStack extends cdk.Stack {
         CONFIG_FILE: 'config.json',
         QUEUE_URL: queue.queueName,
       },
-      architecture: lambda.Architecture.ARM_64,
+      architecture: lambda.Architecture.X86_64,
       memorySize: 2048,
       timeout: cdk.Duration.seconds(120),
     });
